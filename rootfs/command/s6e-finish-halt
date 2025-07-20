@@ -1,0 +1,64 @@
+#!/command/execlineb
+
+define MIN_FINISH_ARGC 666
+
+importas -D 0 finish_argc 1
+ifelse { eltest $finish_argc -lt $MIN_FINISH_ARGC }
+{ 
+  foreground {
+    importas -D "s6e-finish-halt" bin 0
+    fdswap 1 2
+    s6-echo "${bin}: fatal: finish_argc=${finish_argc} cannot less than ${MIN_FINISH_ARGC}
+
+Usage, use in finish script:
+  ${bin} $# $@ prog...
+
+Example 1, halt if fail:
+  #!/command/execlineb -S0
+  ${bin} $# $@ eltest $1 -eq 0
+
+Example 2, halt if fail 6 times in 3 seconds:
+  #!/command/execlineb -S0
+  ${bin} $# $@ s6-permafailon 6 3 1-255
+"
+  }
+  exit 1
+}
+importas finish_exit_code 2
+importas finish_signal 3
+importas finish_service 4
+importas finish_pid 5
+foreground {
+  s6-echo "finish_service='${finish_service}', exit_code=${finish_exit_code}, signle=${finish_signal}, pid=${finish_pid}"
+}
+shift
+shift -n $finish_argc
+elgetpositionals
+ifelse {
+  ifelse { eltest $# -eq 0 }
+  {
+    eltest $finish_exit_code -eq 0
+  }
+  $@
+}
+{
+  exit
+}
+foreground {
+  ifthenelse -s { eltest $finish_exit_code -eq 256 }
+  {
+    backtick -E exit_code {
+      e6-expr 128 + $finish_signal
+    }
+  }
+  {
+    define exit_code $finish_exit_code
+  }
+  foreground {
+    s6-echo "[${finish_service}][finish] set container exitcode: ${exit_code}"
+  }
+  redirfd -w 1 /run/s6-linux-init-container-results/exitcode
+  s6-echo $finish_exit_code
+}
+/run/s6/basedir/bin/halt
+exit 125
