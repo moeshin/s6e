@@ -13,6 +13,8 @@ ifelse { eltest $finish_argc -lt $MIN_FINISH_ARGC }
 Usage, use in finish script:
   ${bin} $# $@ prog...
 
+If prog exit code is not 0, it will halt (stop conatiner).
+
 Example 1, halt if fail:
   #!/command/execlineb -S0
   ${bin} $# $@ eltest $1 -eq 0
