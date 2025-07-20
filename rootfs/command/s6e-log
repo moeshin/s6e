@@ -1,0 +1,75 @@
+#!/command/execlineb
+
+elgetopt "hPo:e:OEt:"
+multisubstitute
+{
+  importas -u -D "" show_help ELGETOPT_h
+  importas -u -D "" without_prefix ELGETOPT_P
+  importas -u -D "" stdout_file ELGETOPT_o
+  importas -u -D "" stderr_file ELGETOPT_e
+  importas -u -D "" redirect_to_out ELGETOPT_O
+  importas -u -D "" redirect_to_err ELGETOPT_E
+  importas -u -D "" tag ELGETOPT_t
+  elgetpositionals
+}
+ifelse { eltest $show_help -o $# = 0 }
+{
+  s6-echo "Usages
+  s6e-log [ -p | -P ] [ -o file | -E ] [ -e file | -O ] [ -t tag ] prog...
+Options
+  -p: write with prefix \"[\${S6E_LOG_PWD_DIRNAME}][\$tag(if set)][out|err]\". This is the default.
+  -P: write without prefix.
+  -o file: wrtie STDOUT to file.
+  -E: redirect STDOUT to STDERR.
+  -e file: wrtie STDERR to file.
+  -O: redirect STDERR to STDOUT.
+  -t tag: set prefix tag.
+"
+}
+ifthenelse -s { eltest $stderr_file }
+{
+  redirfd -a 2 $stderr_file
+}
+{
+  ifthenelse -s { eltest $redirect_to_out }
+  {
+    fdmove -c 2 1
+  }
+  { }
+}
+ifthenelse -s { eltest $stdout_file }
+{
+  redirfd -a 1 $stdout_file
+}
+{
+  ifthenelse -s { eltest $redirect_to_err }
+  {
+    fdmove -c 1 2
+  }
+  { }
+}
+ifelse { eltest $without_prefix }
+{
+  $@
+}
+getcwd -E S6E_LOG_PWD
+backtick -E S6E_LOG_PWD_DIRNAME
+{
+  s6-basename -n $S6E_LOG_PWD
+}
+ifthenelse -s { eltest $tag }
+{
+  define S6E_LOG_PREFIX "[${S6E_LOG_PWD_DIRNAME}][${tag}]"
+}
+{
+  define S6E_LOG_PREFIX "[${S6E_LOG_PWD_DIRNAME}]"
+}
+fdswap 1 2
+pipeline -w {
+  s6-format-filter "${S6E_LOG_PREFIX}[err] %s"
+}
+fdswap 1 2
+pipeline -w {
+  s6-format-filter "${S6E_LOG_PREFIX}[out] %s"
+}
+$@
